@@ -15,12 +15,14 @@ class VideoManagement:
 
         try:
             ffmpeg.input(file).output(
-                file.replace('_flv.mp4', '.mp4'),
-                c='copy',
-                y='-y',
+                file.replace("_flv.mp4", ".mp4"),
+                c="copy",
+                y="-y",
             ).run(quiet=True)
         except ffmpeg.Error as e:
-            logger.error(f"ffmpeg error: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
+            logger.error(
+                f"ffmpeg error: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}"
+            )
 
         os.remove(file)
 

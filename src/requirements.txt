@@ -3,3 +3,4 @@ distro
 ffmpeg-python
 pyrogram
 requests
+git+https://github.com/openai/whisper.git

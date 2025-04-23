@@ -8,9 +8,9 @@ from core.tiktok_api import TikTokAPI
 from utils.logger_manager import logger
 from utils.video_management import VideoManagement
 from upload.telegram import Telegram
-from utils.custom_exceptions import LiveNotFound, UserLiveException, \
-    TikTokException
+from utils.custom_exceptions import LiveNotFound, UserLiveException, TikTokException
 from utils.enums import Mode, Error, TimeOut, TikTokError
+from utils.transcriber import WhisperTranscriber
 
 
 class TikTokRecorder:
@@ -27,6 +27,7 @@ class TikTokRecorder:
         output,
         duration,
         use_telegram,
+        use_transcriber,
     ):
         # Setup TikTok API client
         self.tiktok = TikTokAPI(proxy=proxy, cookies=cookies)
@@ -45,13 +46,15 @@ class TikTokRecorder:
         # Upload Settings
         self.use_telegram = use_telegram
 
+        # Transcriber Settings
+        self.use_transcriber = True if use_transcriber else False
+
         # Check if the user's country is blacklisted
         self.check_country_blacklisted()
 
         # Get live information based on the provided user data
         if self.url:
-            self.user, self.room_id = \
-                self.tiktok.get_room_and_user_from_url(self.url)
+            self.user, self.room_id = self.tiktok.get_room_and_user_from_url(self.url)
 
         if not self.user:
             self.user = self.tiktok.get_user_from_room_id(self.room_id)
@@ -60,7 +63,10 @@ class TikTokRecorder:
             self.room_id = self.tiktok.get_room_id_from_user(self.user)
 
         logger.info(f"USERNAME: {self.user}" + ("\n" if not self.room_id else ""))
-        logger.info(f"ROOM_ID:  {self.room_id}" + ("\n" if not self.tiktok.is_room_alive(self.room_id) else ""))
+        logger.info(
+            f"ROOM_ID:  {self.room_id}"
+            + ("\n" if not self.tiktok.is_room_alive(self.room_id) else "")
+        )
 
         # If proxy is provided, set up the HTTP client without the proxy
         if proxy:
@@ -68,11 +74,11 @@ class TikTokRecorder:
 
     def run(self):
         """
-        runs the program in the selected mode. 
-        
+        runs the program in the selected mode.
+
         If the mode is MANUAL, it checks if the user is currently live and
         if so, starts recording.
-        
+
         If the mode is AUTOMATIC, it continuously checks if the user is live
         and if not, waits for the specified timeout before rechecking.
         If the user is live, it starts recording.
@@ -99,7 +105,9 @@ class TikTokRecorder:
 
             except UserLiveException as ex:
                 logger.info(ex)
-                logger.info(f"Waiting {self.automatic_interval} minutes before recheck\n")
+                logger.info(
+                    f"Waiting {self.automatic_interval} minutes before recheck\n"
+                )
                 time.sleep(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except ConnectionError:
@@ -119,21 +127,23 @@ class TikTokRecorder:
 
         current_date = time.strftime("%Y.%m.%d_%H-%M-%S", time.localtime())
 
-        if isinstance(self.output, str) and self.output != '':
-            if not (self.output.endswith('/') or self.output.endswith('\\')):
-                if os.name == 'nt':
+        if isinstance(self.output, str) and self.output != "":
+            if not (self.output.endswith("/") or self.output.endswith("\\")):
+                if os.name == "nt":
                     self.output = self.output + "\\"
                 else:
                     self.output = self.output + "/"
 
-        output = f"{self.output if self.output else ''}TK_{self.user}_{current_date}_flv.mp4"
+        output = (
+            f"{self.output if self.output else ''}TK_{self.user}_{current_date}_flv.mp4"
+        )
 
         if self.duration:
             logger.info(f"Started recording for {self.duration} seconds ")
         else:
             logger.info("Started recording...")
 
-        buffer_size = 512 * 1024 # 512 KB buffer
+        buffer_size = 512 * 1024  # 512 KB buffer
         buffer = bytearray()
 
         logger.info("[PRESS CTRL + C ONCE TO STOP]")
@@ -151,6 +161,8 @@ class TikTokRecorder:
                         if len(buffer) >= buffer_size:
                             out_file.write(buffer)
                             buffer.clear()
+
+                        # Post-processing transcription will occur after recording
 
                         elapsed_time = time.time() - start_time
                         if self.duration and elapsed_time >= self.duration:
@@ -182,8 +194,11 @@ class TikTokRecorder:
         logger.info(f"Recording finished: {output}\n")
         VideoManagement.convert_flv_to_mp4(output)
 
+        if self.use_transcriber:
+            WhisperTranscriber.transcribe(output.replace("_flv.mp4", ".mp4"))
+
         if self.use_telegram:
-            Telegram().upload(output.replace('_flv.mp4', '.mp4'))
+            Telegram().upload(output.replace("_flv.mp4", ".mp4"))
 
     def check_country_blacklisted(self):
         is_blacklisted = self.tiktok.is_country_blacklisted()

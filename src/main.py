@@ -19,8 +19,13 @@ from utils.logger_manager import logger
 
 from core.tiktok_recorder import TikTokRecorder
 from utils.enums import TikTokError
-from utils.custom_exceptions import LiveNotFound, ArgsParseError, \
-    UserLiveException, IPBlockedByWAF, TikTokException
+from utils.custom_exceptions import (
+    LiveNotFound,
+    ArgsParseError,
+    UserLiveException,
+    IPBlockedByWAF,
+    TikTokException,
+)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -51,6 +56,7 @@ def main():
             output=args.output,
             duration=args.duration,
             use_telegram=args.telegram,
+            use_transcriber=args.transcribe,
         ).run()
 
     except ArgsParseError as ex:
